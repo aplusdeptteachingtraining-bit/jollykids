@@ -200,7 +200,7 @@ footer{border-top:1px solid var(--line); padding:26px 0; text-align:center; font
     </div>
     <div class="info-box">
       <div>📸 Instagram：<a href="https://instagram.com/hellojollykids" target="_blank" rel="noopener">@hellojollykids</a></div>
-      <div>💬 官方 Line@：<a href="https://line.me/ti/p/@921kkhiu" target="_blank" rel="noopener">加入好友</a></div>
+      <div>💬 官方 Line@：<a href="https://lin.ee/yNY2ZbJ" target="_blank" rel="noopener">加入好友</a></div>
       <div>📩 合作邀約：hellojollykids3@gmail.com</div>
       <div>💳 報名採銀行匯款／LinePay，完成付款請至官方 Line 對帳</div>
     </div>
@@ -302,9 +302,9 @@ function renderUpcoming(list){
 
 // 若試算表的「照片網址」欄是空的，就用內建的歷史照片當備用（用標題比對）
 const PHOTO_FALLBACK = {};
-MOCK_EVENTS.forEach(ev=>{ if(ev.img) PHOTO_FALLBACK[ev.title] = ev.img; });
+MOCK_EVENTS.forEach(ev=>{ if(ev.img) PHOTO_FALLBACK[ev.date] = ev.img; });
 function photoFor(ev){
-  return ev.img || PHOTO_FALLBACK[ev.title] || "";
+  return ev.img || PHOTO_FALLBACK[ev.date] || "";
 }
 
 function renderArchive(list){
