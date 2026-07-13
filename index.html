@@ -300,6 +300,13 @@ function renderUpcoming(list){
   `).join("");
 }
 
+// 若試算表的「照片網址」欄是空的，就用內建的歷史照片當備用（用標題比對）
+const PHOTO_FALLBACK = {};
+MOCK_EVENTS.forEach(ev=>{ if(ev.img) PHOTO_FALLBACK[ev.title] = ev.img; });
+function photoFor(ev){
+  return ev.img || PHOTO_FALLBACK[ev.title] || "";
+}
+
 function renderArchive(list){
   const grid = document.getElementById("archive-grid");
   const sorted = [...list].sort((a,b)=> new Date(b.date) - new Date(a.date));
@@ -307,9 +314,10 @@ function renderArchive(list){
   grid.innerHTML = sorted.map(ev=>{
     const yr = new Date(ev.date+"T00:00:00").getFullYear();
     const md = new Date(ev.date+"T00:00:00").toLocaleDateString("zh-TW", {month:"long", day:"numeric"});
+    const img = photoFor(ev);
     return `
     <div class="archive-card">
-      ${ev.img ? `<img src="${ev.img}" alt="${ev.title}" loading="lazy">` : `<div style="position:absolute;inset:0;background:linear-gradient(135deg, var(--curtain), var(--stage-deep))"></div>`}
+      ${img ? `<img src="${img}" alt="${ev.title}" loading="lazy">` : `<div style="position:absolute;inset:0;background:linear-gradient(135deg, var(--curtain), var(--stage-deep))"></div>`}
       <div class="info">
         <div class="yr">${yr} 年 ${md}</div>
         <h4>${ev.title}</h4>
