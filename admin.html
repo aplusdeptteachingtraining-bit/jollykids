@@ -48,8 +48,13 @@
     含有「取消」的算取消（不列入正取與金額），其餘算正取。留空則全部算正取。
 
   人數欄位：
-    如果一筆報名可能代表多人（例如表單有一欄「同行人數」），把該欄「欄位標題文字」
-    填進來，系統會加總這欄位的數字當作總人數；留空則預設每筆回覆算1人。
+    如果一筆報名可能代表多人，把該欄「欄位標題文字」填進來，系統會加總這欄位的數字
+    當作總人數；留空則預設每筆回覆算1人。
+    ★ 也支援填「多個欄位」，用逗號分隔，系統會把這幾欄的數字加總在一起。常見情境：
+      ‧ 五感活動（報名費以「孩子」為單位計算）→ 只填小孩那一欄，例如：
+        當天有幾位小孩出席
+      ‧ Accupass活動（報名費以「人」為單位，大人小孩都算）→ 填兩欄用逗號分隔：
+        當天有幾位大人出席,當天有幾位小孩出席
 
 每個場次可以各自設定不同的欄位名稱，因為每份表單的題目本來就可能長得不一樣。
 =====================================================================
@@ -371,12 +376,19 @@ async function loadAndRenderStats(e){
 
     const statusKey = findHeaderKey(rows, e.statusField);
     const amountKey = findHeaderKey(rows, e.amountField);
-    const countKey = findHeaderKey(rows, e.countField);
+    const countKeys = findHeaderKeys(rows, e.countField);
 
     let normal = 0, waitlist = 0, cancelled = 0, amountTotal = 0;
     rows.forEach(r=>{
       const statusVal = statusKey ? (r[statusKey]||"") : "";
-      const people = countKey ? (parseFloat(String(r[countKey]).replace(/[^\d.]/g,"")) || 1) : 1;
+      let people = 1;
+      if(countKeys.length){
+        people = countKeys.reduce((sum, k)=>{
+          const raw = String(r[k]||"").replace(/[^\d.]/g,"");
+          const val = parseFloat(raw);
+          return sum + (isNaN(val) ? 0 : val);
+        }, 0);
+      }
       const isCancel = statusVal.includes("取消");
       const isWait = !isCancel && statusVal.includes("候補");
       if(isCancel){ cancelled += people; return; }
@@ -405,6 +417,7 @@ async function loadAndRenderStats(e){
       <div class="stats-grid">${cells.join("")}</div>
       ${e.amountField && !amountKey ? `<div class="stats-err" style="margin-top:10px;">⚠ 找不到金額欄位「${e.amountField}」，請確認試算表欄位標題文字是否一致。</div>` : ""}
       ${e.statusField && !statusKey ? `<div class="stats-err" style="margin-top:6px;">⚠ 找不到狀態欄位「${e.statusField}」，請確認試算表欄位標題文字是否一致。</div>` : ""}
+      ${e.countField && !countKeys.length ? `<div class="stats-err" style="margin-top:6px;">⚠ 找不到人數欄位「${e.countField}」，請確認試算表欄位標題文字是否一致。</div>` : ""}
     `;
   }catch(err){
     console.warn("報名統計讀取失敗", err);
@@ -420,6 +433,14 @@ function findHeaderKey(rows, fieldName){
   const target = fieldName.trim();
   const headers = Object.keys(rows[0]);
   return headers.find(h => h.trim() === target) || null;
+}
+
+function findHeaderKeys(rows, fieldNames){
+  if(!fieldNames || !rows.length) return [];
+  const headers = Object.keys(rows[0]);
+  return fieldNames.split(/[,，、]/).map(s=>s.trim()).filter(Boolean)
+    .map(name => headers.find(h => h.trim() === name))
+    .filter(Boolean);
 }
 
 document.getElementById("filters").addEventListener("click", (ev)=>{
