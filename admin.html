@@ -258,10 +258,14 @@ function parseCSVRaw(text){
     return obj;
   });
 }
+function todayStr(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
 function parseCSV(text){
   return parseCSVRaw(text).map(obj=>({
     title: obj["標題"], date: obj["日期"], tag: obj["分類說明"]||"",
-    desc: obj["簡介"], status: (obj["狀態"]||"upcoming").toLowerCase(),
+    desc: obj["簡介"], status: (obj["日期"]||"") < todayStr() ? "past" : "upcoming",
     form: obj["報名表單連結"]||"", img: obj["照片網址"]||"",
     replyLink: obj["回覆連結"]||"", note: obj["備註"]||"",
     replyCsvUrl: obj["回覆CSV連結"]||"", amountField: obj["金額欄位"]||"",
@@ -285,6 +289,7 @@ let ALL = [];
 let currentFilter = "all";
 let currentSearch = "";
 let selectedIdx = null;
+let currentStatsEvent = null;
 
 function fmtDate(dateStr){
   const d = new Date(dateStr+"T00:00:00");
@@ -352,7 +357,12 @@ function renderDetail(){
       </div>
     </div>
   `;
+  currentStatsEvent = e;
   loadAndRenderStats(e);
+}
+
+function refreshStats(){
+  if(currentStatsEvent) loadAndRenderStats(currentStatsEvent);
 }
 
 function fmtInt(n){ return n.toLocaleString("zh-TW"); }
@@ -368,8 +378,13 @@ async function loadAndRenderStats(e){
     `;
     return;
   }
+  box.innerHTML = `
+    <div class="label">報名統計</div>
+    <div class="stats-empty">統計中…</div>
+  `;
   try{
-    const res = await fetch(e.replyCsvUrl);
+    const bust = (e.replyCsvUrl.includes("?") ? "&" : "?") + "_ts=" + Date.now();
+    const res = await fetch(e.replyCsvUrl + bust, {cache:"no-store"});
     if(!res.ok) throw new Error("HTTP " + res.status);
     const text = await res.text();
     const rows = parseCSVRaw(text);
@@ -377,6 +392,7 @@ async function loadAndRenderStats(e){
     const statusKey = findHeaderKey(rows, e.statusField);
     const amountKey = findHeaderKey(rows, e.amountField);
     const countKeys = findHeaderKeys(rows, e.countField);
+
 
     let normal = 0, waitlist = 0, cancelled = 0, amountTotal = 0;
     rows.forEach(r=>{
@@ -412,17 +428,25 @@ async function loadAndRenderStats(e){
     }
     cells.push(`<div class="stat-cell"><div class="num">${fmtInt(rows.length)}</div><div class="cap">表單總回覆數</div></div>`);
 
+    const now = new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit", second:"2-digit"});
     box.innerHTML = `
-      <div class="label">報名統計 <span style="opacity:.5; font-weight:400;">（自動抓取自回覆試算表）</span></div>
+      <div class="label" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <span>報名統計 <span style="opacity:.6; font-weight:400; text-transform:none; letter-spacing:0;">（自動抓取自回覆試算表・${now} 更新）</span></span>
+        <button onclick="refreshStats()" style="background:rgba(255,255,255,.12); border:none; color:#fff; font-size:.72rem; font-weight:700; padding:5px 12px; border-radius:999px; cursor:pointer; letter-spacing:0; text-transform:none;">🔄 重新整理</button>
+      </div>
       <div class="stats-grid">${cells.join("")}</div>
       ${e.amountField && !amountKey ? `<div class="stats-err" style="margin-top:10px;">⚠ 找不到金額欄位「${e.amountField}」，請確認試算表欄位標題文字是否一致。</div>` : ""}
       ${e.statusField && !statusKey ? `<div class="stats-err" style="margin-top:6px;">⚠ 找不到狀態欄位「${e.statusField}」，請確認試算表欄位標題文字是否一致。</div>` : ""}
       ${e.countField && !countKeys.length ? `<div class="stats-err" style="margin-top:6px;">⚠ 找不到人數欄位「${e.countField}」，請確認試算表欄位標題文字是否一致。</div>` : ""}
+      ${!e.countField ? `<div class="stats-err" style="margin-top:6px; color:var(--gold-soft);">ℹ 尚未設定「人數欄位」，目前是以「每筆回覆算1人」計算，不是加總實際出席人數。</div>` : ""}
     `;
   }catch(err){
     console.warn("報名統計讀取失敗", err);
     box.innerHTML = `
-      <div class="label">報名統計</div>
+      <div class="label" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <span>報名統計</span>
+        <button onclick="refreshStats()" style="background:rgba(255,255,255,.12); border:none; color:#fff; font-size:.72rem; font-weight:700; padding:5px 12px; border-radius:999px; cursor:pointer; letter-spacing:0; text-transform:none;">🔄 重試</button>
+      </div>
       <div class="stats-err">讀取失敗，請確認「回覆CSV連結」是否已正確發布為公開CSV（見本檔案最上方技術說明）。</div>
     `;
   }

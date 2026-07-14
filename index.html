@@ -19,10 +19,15 @@
 
 【正式上線後如何自己新增活動，不用碰程式碼】
 1. 建立一份 Google 試算表，欄位依序為：
-   標題 | 日期(YYYY-MM-DD) | 分類說明 | 簡介 | 狀態(upcoming或past) | 報名表單連結 | 照片網址(可留空)
+   標題 | 日期(YYYY-MM-DD) | 分類說明 | 簡介 | 狀態(可留空，不影響分類) | 報名表單連結 | 照片網址(可留空)
 2. 檔案 → 共用 → 發布到網路 → 選擇「逗號分隔值(.csv)」→ 發布，複製產生的連結。
 3. 把下面 SHEET_CSV_URL 換成你複製的連結。
 4. 存檔後，網站就會改讀取真實資料，不再使用下方內嵌的示範/歷史資料。
+
+【即將上演 / 曾經走進的故事 如何自動分類】
+網站會自動比對「日期」欄位跟今天的日期：日期還沒到 → 顯示在「即將上演」；
+日期已經過了 → 自動移到「曾經走進的故事」。不用手動改「狀態」欄位，過了活動當天、
+下次有人打開網站，就會自動歸類到過往回顧，完全不用維護。
 
 因為過去活動的照片是從你們提供的PDF直接截取，畫質與構圖不一定是最佳版本，
 正式上線建議換成你們手邊解析度更好的原始照片。
@@ -256,19 +261,37 @@ function parseCSV(text){
   }));
 }
 
+function todayStr(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function isPastDate(dateStr){
+  return (dateStr||"") < todayStr();
+}
+
 async function loadAll(){
-  if(!SHEET_CSV_URL) return {events: MOCK_EVENTS, upcoming: MOCK_UPCOMING};
+  if(!SHEET_CSV_URL){
+    const all = [...MOCK_EVENTS, ...MOCK_UPCOMING];
+    return {
+      events: all.filter(e=>isPastDate(e.date)),
+      upcoming: all.filter(e=>!isPastDate(e.date))
+    };
+  }
   try{
     const res = await fetch(SHEET_CSV_URL);
     const text = await res.text();
     const all = parseCSV(text);
     return {
-      events: all.filter(e=>e.status==="past"),
-      upcoming: all.filter(e=>e.status==="upcoming")
+      events: all.filter(e=>isPastDate(e.date)),
+      upcoming: all.filter(e=>!isPastDate(e.date))
     };
   }catch(e){
     console.warn("讀取 Google 試算表失敗，改用內建資料", e);
-    return {events: MOCK_EVENTS, upcoming: MOCK_UPCOMING};
+    const all = [...MOCK_EVENTS, ...MOCK_UPCOMING];
+    return {
+      events: all.filter(e=>isPastDate(e.date)),
+      upcoming: all.filter(e=>!isPastDate(e.date))
+    };
   }
 }
 
