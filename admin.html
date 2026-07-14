@@ -48,13 +48,16 @@
     含有「取消」的算取消（不列入正取與金額），其餘算正取。留空則全部算正取。
 
   人數欄位：
-    如果一筆報名可能代表多人，把該欄「欄位標題文字」填進來，系統會加總這欄位的數字
-    當作總人數；留空則預設每筆回覆算1人。
-    ★ 也支援填「多個欄位」，用逗號分隔，系統會把這幾欄的數字加總在一起。常見情境：
-      ‧ 五感活動（報名費以「孩子」為單位計算）→ 只填小孩那一欄，例如：
-        當天有幾位小孩出席
-      ‧ Accupass活動（報名費以「人」為單位，大人小孩都算）→ 填兩欄用逗號分隔：
+    ★ 這格現在通常「不用填」，系統會自動判斷：
+      ‧ 如果「報名表單連結」是 Accupass 網址 → 自動加總回覆表裡欄位標題含「大人」和
+        含「小孩」的兩欄，當作總人數（例如「當天有幾位大人出席」+「當天有幾位小孩出席」）。
+      ‧ 其他情況（五感活動等，報名費以「孩子」為單位計算）→ 自動找欄位標題含「小孩」
+        的那一欄，只算小孩人數。
+    只有當你的表單欄位標題「沒有」包含「大人」「小孩」這幾個字、導致自動判斷抓不到時，
+    才需要手動填這格：填「該欄位的完整標題文字」，系統會加總這欄位的數字當作總人數；
+    也支援填「多個欄位」用逗號分隔，系統會把這幾欄加總在一起，例如：
         當天有幾位大人出席,當天有幾位小孩出席
+    手動填了這格，系統就會優先用你填的，不再自動判斷。
 
 每個場次可以各自設定不同的欄位名稱，因為每份表單的題目本來就可能長得不一樣。
 =====================================================================
@@ -391,8 +394,22 @@ async function loadAndRenderStats(e){
 
     const statusKey = findHeaderKey(rows, e.statusField);
     const amountKey = findHeaderKey(rows, e.amountField);
-    const countKeys = findHeaderKeys(rows, e.countField);
 
+    let countKeys = findHeaderKeys(rows, e.countField);
+    let countMode = "manual";
+    if(!countKeys.length && rows.length){
+      const headers = Object.keys(rows[0]);
+      const isFiveSense = /五感/.test(e.tag || "");
+      const childKey = headers.find(h => h.includes("小孩"));
+      const adultKey = headers.find(h => h.includes("大人"));
+      if(isFiveSense){
+        countKeys = childKey ? [childKey] : [];
+        countMode = countKeys.length ? "auto-child" : "none";
+      }else{
+        countKeys = [adultKey, childKey].filter(Boolean);
+        countMode = countKeys.length ? "auto-story" : "none";
+      }
+    }
 
     let normal = 0, waitlist = 0, cancelled = 0, amountTotal = 0;
     rows.forEach(r=>{
@@ -428,6 +445,15 @@ async function loadAndRenderStats(e){
     }
     cells.push(`<div class="stat-cell"><div class="num">${fmtInt(rows.length)}</div><div class="cap">表單總回覆數</div></div>`);
 
+    let noteKey = countMode;
+    if(countMode === "manual" && !countKeys.length) noteKey = null;
+    const countModeNote = noteKey ? ({
+      "manual": `ℹ 人數採用你手動設定的「人數欄位」。`,
+      "auto-child": `ℹ 偵測到分類為「五感」活動，只計算「小孩」欄位人數（未加總大人）。`,
+      "auto-story": `ℹ 偵測到非五感活動（故事劇場等），自動加總「大人」＋「小孩」欄位人數。`,
+      "none": `ℹ 找不到含「大人」或「小孩」字樣的欄位，目前退回以「每筆回覆算1人」計算，可手動填「人數欄位」覆蓋。`
+    }[noteKey]) : "";
+
     const now = new Date().toLocaleTimeString("zh-TW", {hour:"2-digit", minute:"2-digit", second:"2-digit"});
     box.innerHTML = `
       <div class="label" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
@@ -437,8 +463,8 @@ async function loadAndRenderStats(e){
       <div class="stats-grid">${cells.join("")}</div>
       ${e.amountField && !amountKey ? `<div class="stats-err" style="margin-top:10px;">⚠ 找不到金額欄位「${e.amountField}」，請確認試算表欄位標題文字是否一致。</div>` : ""}
       ${e.statusField && !statusKey ? `<div class="stats-err" style="margin-top:6px;">⚠ 找不到狀態欄位「${e.statusField}」，請確認試算表欄位標題文字是否一致。</div>` : ""}
-      ${e.countField && !countKeys.length ? `<div class="stats-err" style="margin-top:6px;">⚠ 找不到人數欄位「${e.countField}」，請確認試算表欄位標題文字是否一致。</div>` : ""}
-      ${!e.countField ? `<div class="stats-err" style="margin-top:6px; color:var(--gold-soft);">ℹ 尚未設定「人數欄位」，目前是以「每筆回覆算1人」計算，不是加總實際出席人數。</div>` : ""}
+      ${e.countField && countMode==="manual" && !countKeys.length ? `<div class="stats-err" style="margin-top:6px;">⚠ 找不到人數欄位「${e.countField}」，請確認試算表欄位標題文字是否一致。</div>` : ""}
+      ${countModeNote ? `<div class="stats-err" style="margin-top:6px; color:var(--gold-soft);">${countModeNote}</div>` : ""}
     `;
   }catch(err){
     console.warn("報名統計讀取失敗", err);
